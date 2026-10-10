@@ -16,6 +16,12 @@ _COLOR_CHANGE = pystitch.COLOR_CHANGE
 _END = pystitch.END
 _NEEDLE_POSITION_COMMANDS = {_STITCH, _JUMP}
 
+# Some formats (VP3 in particular) encode the move between two areas of the
+# same color as one long "stitch" where DST/PES use jumps. Machines trim or
+# jump these, so stitch statistics treat anything longer than the longest
+# stitch a home machine sews as a travel move rather than a stitch.
+MAX_SEWN_STITCH_MM = 12.1
+
 
 @dataclass
 class ThreadInfo:
@@ -36,7 +42,9 @@ class DesignInfo:
     trim_count: int
     color_change_count: int
     thread_count: int
+    unique_color_count: int = 0
     threads: list[ThreadInfo] = field(default_factory=list)
+    travel_move_count: int = 0
     longest_stitch_mm: float = 0.0
     mean_stitch_mm: float = 0.0
     thread_length_m: float = 0.0
@@ -101,7 +109,8 @@ def analyze(
     """Summarize a design. Sew time is an estimate for a home machine;
     expose the parameters per machine profile rather than trusting defaults."""
     min_x, min_y, max_x, max_y = stitch_bounds(pattern)
-    lengths = stitch_lengths(pattern)
+    all_lengths = stitch_lengths(pattern)
+    lengths = [n for n in all_lengths if n <= MAX_SEWN_STITCH_MM]
     stitch_count = pattern.count_stitch_commands(_STITCH)
     trims = pattern.count_stitch_commands(_TRIM)
     color_changes = pattern.count_color_changes()
@@ -138,7 +147,9 @@ def analyze(
         trim_count=trims,
         color_change_count=color_changes,
         thread_count=len(pattern.threadlist),
+        unique_color_count=len({t.hex_color for t in threads}),
         threads=threads,
+        travel_move_count=len(all_lengths) - len(lengths),
         longest_stitch_mm=round(max(lengths, default=0.0), 2),
         mean_stitch_mm=round(sum(lengths) / len(lengths), 2) if lengths else 0.0,
         # Top thread only; bobbin and take-up are excluded.

@@ -4,6 +4,10 @@ Sizes below are NOMINAL hoop names converted to mm. The usable sewing field
 varies by machine model (a Brother "4x4" sews about 100 x 100 mm), so the
 production catalog must store each model's published sewing area. Treat this
 table as defaults until that catalog exists.
+
+No clearance is applied by default: commercial designs are digitized right
+up to the nominal field (e.g. 98.6 mm designs sold as "4x4"), and rejecting
+them would contradict the designer's own sizing.
 """
 
 from __future__ import annotations
@@ -44,7 +48,7 @@ class FitResult:
     scale_to_fit: float  # 1.0 if it fits; otherwise the uniform scale needed
 
 
-def check_fit(info: DesignInfo, hoop: Hoop, *, clearance_mm: float = 2.0, allow_rotation: bool = True) -> FitResult:
+def check_fit(info: DesignInfo, hoop: Hoop, *, clearance_mm: float = 0.0, allow_rotation: bool = True) -> FitResult:
     avail_w = hoop.width_mm - 2 * clearance_mm
     avail_h = hoop.height_mm - 2 * clearance_mm
     w, h = info.width_mm, info.height_mm

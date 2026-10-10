@@ -63,3 +63,17 @@ def test_mirror_keeps_size_and_original_untouched(pattern):
     assert report.mirrored
     assert analyze(new).width_mm == analyze(pattern).width_mm
     assert [list(s) for s in pattern.stitches] == before
+
+
+def test_exact_band_edges(pattern):
+    assert transform(pattern, scale=1.10)[1].level == "ok"
+    assert transform(pattern, scale=0.80)[1].level == "caution"
+
+
+def test_existing_short_stitches_not_blamed(pattern):
+    import pystitch
+
+    # A tie-in: two 0.2 mm stitches already in the design.
+    pattern.stitches[2:2] = [[0, 2, pystitch.STITCH], [0, 4, pystitch.STITCH]]
+    _, report = transform(pattern, scale=1.05)
+    assert report.short_stitch_count == 0 and report.level == "ok"

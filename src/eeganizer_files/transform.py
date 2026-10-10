@@ -15,7 +15,7 @@ import pystitch
 
 from .design import clone_pattern
 from .formats import get_format
-from .inspect import stitch_bounds, stitch_lengths
+from .inspect import MAX_SEWN_STITCH_MM, stitch_bounds, stitch_lengths
 
 # Commonly cited safe band for scaling stitch files. Practitioner guidance,
 # not a measured standard: validate with test stitch-outs before relying on it.
@@ -107,7 +107,8 @@ def transform(
     )
 
     resized = abs(sx - 1.0) > 1e-9 or abs(sy - 1.0) > 1e-9
-    change_pct = max(abs(sx - 1.0), abs(sy - 1.0)) * 100
+    # Rounded so an exact 10% / 20% request lands in the lower band.
+    change_pct = round(max(abs(sx - 1.0), abs(sy - 1.0)) * 100, 6)
 
     if resized and free_standing_lace:
         report.level = "blocked"
@@ -152,11 +153,18 @@ def transform(
     matrix.post_translate(cx, cy)
     result.transform(matrix)
 
+    # Compare stitch by stitch (a transform keeps the sequence) so moves that
+    # were already longer than the limit (travel moves in VP3 etc.) are not
+    # blamed on the resize.
+    before = stitch_lengths(pattern)
     lengths = stitch_lengths(result)
-    report.longest_stitch_mm = round(max(lengths, default=0.0), 2)
-    report.long_stitch_count = sum(1 for n in lengths if n > max_stitch)
-    original_short = sum(1 for n in stitch_lengths(pattern) if n < SHORT_STITCH_MM)
-    report.short_stitch_count = sum(1 for n in lengths if n < SHORT_STITCH_MM)
+    sewn = [after for orig, after in zip(before, lengths) if orig <= MAX_SEWN_STITCH_MM]
+    report.longest_stitch_mm = round(max(sewn, default=0.0), 2)
+    report.long_stitch_count = sum(1 for n in sewn if n > max_stitch)
+    # Only stitches the resize made short (tie-ins are short by design).
+    report.short_stitch_count = sum(
+        1 for orig, after in zip(before, lengths) if after < SHORT_STITCH_MM <= orig
+    )
 
     if report.long_stitch_count:
         report.level = _raise_level(report.level, "warning")
@@ -164,10 +172,10 @@ def transform(
             f"{report.long_stitch_count} stitches are longer than {max_stitch} mm. They will be split "
             "on export or the machine may trim/jump them; satin areas will look different."
         )
-    if report.short_stitch_count > original_short:
+    if report.short_stitch_count:
         report.level = _raise_level(report.level, "caution")
         report.messages.append(
-            f"{report.short_stitch_count - original_short} more stitches are shorter than "
-            f"{SHORT_STITCH_MM} mm than in the original; watch for thread breaks and nests."
+            f"{report.short_stitch_count} stitches become shorter than {SHORT_STITCH_MM} mm; "
+            "watch for thread breaks and nests."
         )
     return result, report

@@ -71,8 +71,8 @@ eefile preview design.pes preview.png
   stored but not opened.
 - **Parsers are not fuzzed.** Always go through `sandbox.run_isolated`, and run
   the worker in a no-network, read-only container in production.
-- Tests use synthetic designs. A corpus of real customer-representative files
-  per format (with permission) is the next testing step.
+- Unit tests use synthetic designs; `tests/test_corpus.py` checks real
+  commercial files kept outside the repo (see [`docs/CORPUS.md`](docs/CORPUS.md)).
 - pystitch's SEW writer overflows on long moves; `convert.WRITER_OVERRIDES`
   works around it. Report upstream.
 
