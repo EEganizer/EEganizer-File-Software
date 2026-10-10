@@ -51,3 +51,16 @@ def test_render_does_not_mutate_input(pattern):
     render_png(pattern)
     render_svg(pattern)
     assert [list(s) for s in pattern.stitches] == before
+
+
+def test_thumbnail_ignores_far_jumps(pattern):
+    import struct
+
+    import pystitch
+
+    from eeganizer_files.render import render_thumbnail
+
+    pattern.stitches.insert(0, [-20000, -20000, pystitch.JUMP])
+    png = render_thumbnail(pattern, 64)
+    width, height = struct.unpack(">II", png[16:24])
+    assert max(width, height) <= 66

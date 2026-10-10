@@ -11,7 +11,8 @@ from .convert import write_design
 from .design import DesignError, load_design
 from .hoops import HOOPS, check_fit, smallest_hoop
 from .inspect import analyze
-from .render import render_png
+from .render import render_png, render_thumbnail
+from .transform import transform
 
 
 def _handle(request: dict) -> dict:
@@ -29,6 +30,28 @@ def _handle(request: dict) -> dict:
         return {"data": base64.b64encode(result.data).decode(), "extension": result.extension, "warnings": result.warnings}
     if op == "preview_png":
         return {"data": base64.b64encode(render_png(pattern, fancy=params.get("fancy", True))).decode()}
+    if op == "thumbnail":
+        png = render_thumbnail(pattern, int(params.get("size", 256)), fancy=params.get("fancy", True))
+        return {"data": base64.b64encode(png).decode()}
+    if op == "transform":
+        target = params["target"]
+        new, report = transform(
+            pattern,
+            scale=params.get("scale"),
+            target_width_mm=params.get("target_width_mm"),
+            target_height_mm=params.get("target_height_mm"),
+            rotate_degrees=params.get("rotate_degrees", 0.0),
+            mirror_horizontal=params.get("mirror_horizontal", False),
+            mirror_vertical=params.get("mirror_vertical", False),
+            target_extension=target,
+            free_standing_lace=params.get("free_standing_lace", False),
+            allow_large_resize=params.get("allow_large_resize", False),
+        )
+        out = {"report": dict(vars(report), blocked=report.blocked)}
+        if new is not None:
+            result = write_design(new, target, pes_version=params.get("pes_version", 6))
+            out.update(data=base64.b64encode(result.data).decode(), extension=result.extension, warnings=result.warnings)
+        return out
     if op == "fit":
         info = analyze(pattern)
         fit = check_fit(info, HOOPS[params["hoop"]])

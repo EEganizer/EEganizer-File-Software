@@ -10,7 +10,7 @@ from .inspect import DesignInfo, analyze
 from .convert import ConversionResult, convert, write_design
 from .transform import TransformReport, transform
 from .hoops import HOOPS, Hoop, FitResult, check_fit
-from .render import render_png, render_svg
+from .render import render_png, render_svg, render_thumbnail
 
 __all__ = [
     "DesignError",
@@ -29,6 +29,7 @@ __all__ = [
     "check_fit",
     "render_png",
     "render_svg",
+    "render_thumbnail",
 ]
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"

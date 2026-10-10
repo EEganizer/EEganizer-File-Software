@@ -22,6 +22,31 @@ top of it is EEganizer code. The research behind this choice is in
 | Previews | `render.render_png`, `render_svg` | PNG with thread shading (1 px = 0.1 mm), SVG for a zoomable viewer. |
 | Isolation | `sandbox.run_isolated` | Parses untrusted uploads in a child process with timeout, memory and CPU limits. Use this for every customer file. |
 
+## HTTP service
+
+A private API for EEganizer.com (bearer-token auth, every file parsed in the sandbox):
+
+| Endpoint | Returns |
+|---|---|
+| `GET /healthz` | liveness (no auth) |
+| `GET /v1/formats` | readable/writable formats, store-only formats, machine brand → format, hoop table |
+| `POST /v1/inspect` | properties JSON + smallest fitting hoop |
+| `POST /v1/thumbnail?size=256` | PNG thumbnail |
+| `POST /v1/convert?target=jef` or `?machine=brother` | converted file; warnings in `X-EEfile-Warnings` |
+| `POST /v1/fit?hoop=5x7` | fits / needs rotation / scale to fit |
+| `POST /v1/transform?scale=1.1&rotate=90&machine=janome` | transformed file + `X-EEfile-Transform-Report`; `422` with the report when blocked |
+
+Uploads are multipart `file=` with the original file name (its extension picks the format).
+
+```bash
+pip install -e ".[service]"
+EEFILE_API_TOKEN=change-me uvicorn --factory eeganizer_files.service:create_app --port 8080
+curl -H "Authorization: Bearer change-me" -F file=@design.pes "localhost:8080/v1/convert?machine=janome" -o design.jef
+```
+
+The service refuses to start without `EEFILE_API_TOKEN`. A `Dockerfile` runs it
+as a non-root user; run the container read-only on an internal network.
+
 ## Quick start
 
 ```bash
@@ -51,13 +76,10 @@ eefile preview design.pes preview.png
 - pystitch's SEW writer overflows on long moves; `convert.WRITER_OVERRIDES`
   works around it. Report upstream.
 
-## Roadmap
+## Plan
 
-1. View & convert: thumbnails and properties at upload, one-click export per
-   the customer's machine (`formats.MACHINE_FORMATS`).
-2. Fit & light edit: per-model hoop catalog, "My Machines" profile, thread
-   charts by brand, guarded resize UI.
-3. In-browser viewer and, if customers want it, density-preserving resize.
+See [`docs/PLAN.md`](docs/PLAN.md) for phases, milestones, status and the
+decisions still needed from EEganizer.
 
 ## License
 
