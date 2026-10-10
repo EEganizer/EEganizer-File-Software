@@ -70,6 +70,28 @@ def _cmd_fit(args) -> int:
     return 0 if fit.fits else 1
 
 
+def _cmd_compose(args) -> int:
+    from .compose import ComposeError
+    from .layout import compose_layout, report_to_dict
+
+    layout_path = Path(args.layout)
+    layout = json.loads(layout_path.read_text())
+    if args.target:
+        layout["target"] = args.target
+    names = {item.get("file") for item in layout.get("items", []) if isinstance(item, dict)}
+    for letters in (layout.get("alphabets") or {}).values():
+        names.update(letters)
+    files = {name: (layout_path.parent / name).read_bytes() for name in names if name}
+    try:
+        result, report = compose_layout(files, layout)
+    except ComposeError as exc:
+        print(f"error [{exc.code}]: {exc}", file=sys.stderr)
+        return 3
+    Path(args.output).write_bytes(result.data)
+    print(json.dumps(report_to_dict(report), indent=2))
+    return 0
+
+
 def _cmd_formats(_args) -> int:
     print(json.dumps({"read": READABLE, "write": WRITABLE}, indent=2))
     return 0
@@ -110,6 +132,12 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("file")
     p.add_argument("--hoop", required=True, choices=sorted(HOOPS))
     p.set_defaults(func=_cmd_fit)
+
+    p = sub.add_parser("compose", help="combine designs and lettering from a JSON layout")
+    p.add_argument("layout", help="layout JSON; file names are relative to it")
+    p.add_argument("output")
+    p.add_argument("--target", help="output format (default: layout's target)")
+    p.set_defaults(func=_cmd_compose)
 
     p = sub.add_parser("formats", help="list readable/writable formats")
     p.set_defaults(func=_cmd_formats)

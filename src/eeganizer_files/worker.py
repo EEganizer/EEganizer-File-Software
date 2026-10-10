@@ -11,6 +11,7 @@ from .convert import write_design
 from .design import DesignError, load_design
 from .hoops import HOOPS, check_fit, smallest_hoop
 from .inspect import analyze
+from .layout import compose_layout, report_to_dict
 from .render import render_png, render_thumbnail
 from .transform import transform
 
@@ -18,6 +19,15 @@ from .transform import transform
 def _handle(request: dict) -> dict:
     data = base64.b64decode(request["data"])
     params = request.get("params", {})
+    if request["op"] == "compose":
+        files = {name: base64.b64decode(blob) for name, blob in params["files"].items()}
+        result, report = compose_layout(files, params["layout"])
+        return {
+            "data": base64.b64encode(result.data).decode(),
+            "extension": result.extension,
+            "warnings": result.warnings,
+            "report": report_to_dict(report),
+        }
     pattern = load_design(data, request["extension"])
     op = request["op"]
 

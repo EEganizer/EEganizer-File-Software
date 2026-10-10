@@ -54,13 +54,14 @@ Husqvarna/Pfaff).
 | 2.4 | Printable thread chart / worksheet (color sequence, stitch counts, size, thumbnail) |
 | 2.5 | Thread brand matching (convert hex colors to nearest Isacord / Madeira / Brother etc.) |
 | 2.6 | Batch export: pick designs → one ZIP in the machine's format, ready for USB |
+| 2.7 | **Combine designs + lettering** (library, CLI, `/v1/compose`) — **engine done**; needs a layout editor UI (drag to place, live preview) and real alphabet packs to test with |
 
 ### Phase 3 — Richer experience
 
 | # | Milestone |
 |---|---|
 | 3.1 | In-browser interactive viewer (zoom, step through colors, stitch-out simulation) using the SVG/stitch data from the service |
-| 3.2 | Simple combine: place two designs or add a basic text-free layout in one hoop |
+| 3.2 | Lettering extras: arc/curved text, monogram templates, kerning tables per alphabet |
 | 3.3 | Research spike: density-preserving resize for fill areas (our own algorithm), or license a commercial engine if customers ask for it |
 
 ## Decisions needed from EEganizer

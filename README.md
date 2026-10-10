@@ -18,6 +18,8 @@ top of it is EEganizer code. The research behind this choice is in
 | Properties | `inspect.analyze` | Size (mm/in), stitch/jump/trim/color-change counts, thread list with colors and per-thread stitch counts, longest and mean stitch, top-thread length, sew-time estimate. |
 | Convert | `convert.convert`, `write_design` | Writes PES (v1 or v6), DST, JEF, EXP, VP3, XXX, SEW, U01, PEC, TBF. Warns when the target drops thread colors (DST/EXP/U01/TBF). |
 | Resize / rotate / mirror | `transform.transform` | Geometric only — stitches are **not** recalculated. Reports density change, stitches over the format's max length (12.1 mm cap), new short stitches. ≤10% ok, 10–20% caution, >20% blocked unless `allow_large_resize`. Free-standing lace is never resized. |
+| Combine designs | `compose.compose` | Place several designs in one hoop (position, rotate, mirror, guarded resize, recolor). Sewn in order with a trim between pieces; a color stop only when the thread changes. Reports size, overlaps and hoop fit. |
+| Lettering | `lettering.layout_text` | Spells text from an embroidery alphabet pack (one file per letter: `A.pes`, `a_lower.jef`, `Upper B.dst`, `exclamation.vp3` …) on a common baseline, with descenders, spacing, alignment and multiple lines. Computer fonts (TTF) are not supported — that needs auto-digitizing. |
 | Hoop fit | `hoops.check_fit`, `smallest_hoop` | Fit with clearance, with/without 90° rotation, scale-to-fit. Hoop table is nominal sizes — replace with per-machine sewing areas. |
 | Previews | `render.render_png`, `render_svg` | PNG with thread shading (1 px = 0.1 mm), SVG for a zoomable viewer. |
 | Isolation | `sandbox.run_isolated` | Parses untrusted uploads in a child process with timeout, memory and CPU limits. Use this for every customer file. |
@@ -34,6 +36,7 @@ A private API for EEganizer.com (bearer-token auth, every file parsed in the san
 | `POST /v1/thumbnail?size=256` | PNG thumbnail |
 | `POST /v1/convert?target=jef` or `?machine=brother` | converted file; warnings in `X-EEfile-Warnings` |
 | `POST /v1/fit?hoop=5x7` | fits / needs rotation / scale to fit |
+| `POST /v1/compose` (`files=` many, `layout=` JSON) | combined file + `X-EEfile-Compose-Report` (see `layout.py` for the layout format) |
 | `POST /v1/transform?scale=1.1&rotate=90&machine=janome` | transformed file + `X-EEfile-Transform-Report`; `422` with the report when blocked |
 
 Uploads are multipart `file=` with the original file name (its extension picks the format).
@@ -60,6 +63,7 @@ eefile convert design.pes design.jef
 eefile resize design.pes bigger.pes --scale 1.1
 eefile fit design.pes --hoop 5x7
 eefile preview design.pes preview.png
+eefile compose layout.json combined.pes   # designs + lettering from a JSON layout
 ```
 
 ## Known limits

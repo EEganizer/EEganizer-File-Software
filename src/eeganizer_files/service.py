@@ -14,7 +14,7 @@ import json
 import os
 from pathlib import PurePath
 
-from fastapi import Depends, FastAPI, File, Header, HTTPException, Query, UploadFile
+from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Query, UploadFile
 from fastapi.responses import JSONResponse, Response
 
 from .formats import KNOWN_UNREADABLE, MACHINE_FORMATS, READABLE, WRITABLE, normalize_extension
@@ -32,6 +32,15 @@ _STATUS_BY_CODE = {
     "too_many_stitches": 422,
     "crashed": 422,
     "timeout": 504,
+    "bad_layout": 400,
+    "missing_file": 400,
+    "missing_target": 400,
+    "unknown_machine": 400,
+    "unknown_hoop": 400,
+    "empty_layout": 400,
+    "empty_text": 400,
+    "missing_letters": 422,
+    "transform_blocked": 422,
 }
 
 _MEDIA_TYPES = {"png": "image/png"}
@@ -64,8 +73,8 @@ def _resolve_target(target: str | None, machine: str | None) -> str:
     raise ApiError(400, "missing_target", "give a target format or a machine brand")
 
 
-def _download_name(upload: UploadFile, ext: str) -> str:
-    stem = PurePath(upload.filename or "design").stem or "design"
+def _download_name(filename: str | None, ext: str) -> str:
+    stem = PurePath(filename or "design").stem or "design"
     safe = "".join(c for c in stem if c.isalnum() or c in "-_ ").strip() or "design"
     return f"{safe}.{ext}"
 
@@ -159,7 +168,7 @@ def create_app(
         if pes_version not in (1, 6):
             raise ApiError(400, "bad_pes_version", "pes_version must be 1 or 6")
         result = run("convert", data, ext, {"target": target_ext, "pes_version": pes_version})
-        return file_response(result, _download_name(file, target_ext))
+        return file_response(result, _download_name(file.filename, target_ext))
 
     @app.post("/v1/fit", dependencies=auth)
     def fit(file: UploadFile = File(...), hoop: str = Query(...)) -> dict:
@@ -204,7 +213,29 @@ def create_app(
         report = result["report"]
         if report["blocked"]:
             return JSONResponse(status_code=422, content={"error": "transform_blocked", "report": report})
-        return file_response(result, _download_name(file, target_ext), {"X-EEfile-Transform-Report": json.dumps(report)})
+        return file_response(result, _download_name(file.filename, target_ext), {"X-EEfile-Transform-Report": json.dumps(report)})
+
+    @app.post("/v1/compose", dependencies=auth)
+    def compose_endpoint(files: list[UploadFile] = File(...), layout: str = Form(...)) -> Response:
+        """Combine designs and lettering. ``layout`` is a JSON document (see layout.py);
+        it refers to the uploaded files by file name."""
+        try:
+            layout_doc = json.loads(layout)
+        except ValueError as exc:
+            raise ApiError(400, "bad_layout", "layout is not valid JSON") from exc
+        blobs: dict[str, str] = {}
+        total = 0
+        for upload in files:
+            name = upload.filename or ""
+            _filename_extension(upload)
+            data = upload.file.read(max_upload_bytes + 1)
+            total += len(data)
+            if total > max_upload_bytes:
+                raise ApiError(413, "too_large", f"uploads exceed {max_upload_bytes} bytes in total")
+            blobs[name] = base64.b64encode(data).decode()
+        result = run("compose", b"", "", {"files": blobs, "layout": layout_doc})
+        name = _download_name(str(layout_doc.get("name") or "combined"), result["extension"])
+        return file_response(result, name, {"X-EEfile-Compose-Report": json.dumps(result["report"])})
 
     return app
 
