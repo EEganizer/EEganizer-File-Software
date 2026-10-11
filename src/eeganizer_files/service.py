@@ -218,6 +218,19 @@ def create_app(
             return JSONResponse(status_code=422, content={"error": "transform_blocked", "report": report})
         return file_response(result, _download_name(file.filename, target_ext), {"X-EEfile-Transform-Report": json.dumps(report)})
 
+    @app.post("/v1/worksheet", dependencies=auth)
+    def worksheet(file: UploadFile = File(...)) -> Response:
+        """Printable thread chart (self-contained HTML)."""
+        data, ext = read_upload(file)
+        title = PurePath(file.filename or "Design").stem
+        result = run("worksheet", data, ext, {"title": title})
+        return Response(
+            result["html"],
+            media_type="text/html; charset=utf-8",
+            # The page embeds text from the uploaded file; allow nothing but inline styles and its own image.
+            headers={"Content-Security-Policy": "default-src 'none'; img-src data:; style-src 'unsafe-inline'"},
+        )
+
     @app.get("/v1/machines", dependencies=auth)
     def machines() -> dict:
         return catalog_to_dict()

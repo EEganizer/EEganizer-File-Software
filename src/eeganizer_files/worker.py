@@ -63,6 +63,14 @@ def _handle(request: dict) -> dict:
             result = write_design(new, target, pes_version=params.get("pes_version", 6))
             out.update(data=base64.b64encode(result.data).decode(), extension=result.extension, warnings=result.warnings)
         return out
+    if op == "worksheet":
+        from .formats import get_format
+        from .worksheet import worksheet_html
+
+        spec = get_format(request["extension"])
+        page = worksheet_html(pattern, title=str(params.get("title") or "Design"),
+                              has_colors=bool(spec and spec.stores_thread_colors))
+        return {"html": page}
     if op == "fit_machines":
         info = analyze(pattern)
         results = []
