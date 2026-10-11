@@ -14,7 +14,7 @@ import io
 import json
 import os
 import zipfile
-from pathlib import PurePath
+from pathlib import Path, PurePath
 
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Query, UploadFile
 from fastapi.responses import JSONResponse, Response
@@ -91,6 +91,7 @@ def create_app(
     allow_no_auth: bool = False,
     max_upload_bytes: int = DEFAULT_MAX_UPLOAD_BYTES,
     sandbox_timeout_s: float = 20.0,
+    demo: bool | None = None,
 ) -> FastAPI:
     token = token if token is not None else os.environ.get("EEFILE_API_TOKEN")
     if not token and not allow_no_auth:
@@ -133,6 +134,16 @@ def create_app(
     @app.exception_handler(ApiError)
     def _api_error(_request, exc: ApiError):
         return JSONResponse(status_code=exc.status_code, content=exc.detail)
+
+    if demo if demo is not None else os.environ.get("EEFILE_DEMO") == "1":
+        demo_page = (Path(__file__).parent / "static" / "demo.html").read_text(encoding="utf-8")
+
+        @app.get("/demo", include_in_schema=False)
+        def demo_ui() -> Response:
+            # The page holds no data; it calls the API with the token the user types in.
+            return Response(demo_page, media_type="text/html; charset=utf-8",
+                            headers={"Content-Security-Policy": "default-src 'self'; img-src 'self' blob: data:; "
+                                     "style-src 'unsafe-inline'; script-src 'unsafe-inline'"})
 
     @app.get("/healthz")
     def healthz() -> dict:

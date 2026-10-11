@@ -53,6 +53,12 @@ EEFILE_API_TOKEN=change-me uvicorn --factory eeganizer_files.service:create_app 
 curl -H "Authorization: Bearer change-me" -F file=@design.pes "localhost:8080/v1/convert?machine=janome" -o design.jef
 ```
 
+**Demo page:** start with `EEFILE_DEMO=1` and open `http://localhost:8080/demo`,
+enter the token, and try every feature in the browser: open a design,
+properties and thread list, fit for a machine brand, guarded resize, add a
+name from an alphabet pack, download. Off by default; the page holds no data
+and calls the API with the token typed in.
+
 The service refuses to start without `EEFILE_API_TOKEN`. A `Dockerfile` runs it
 as a non-root user; run the container read-only on an internal network.
 

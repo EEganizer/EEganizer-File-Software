@@ -6,7 +6,7 @@ Example::
       "items": [
         {"type": "design", "file": "whale.pes", "x_mm": 0, "y_mm": 0},
         {"type": "text", "text": "Ella", "alphabet": "script",
-         "x_mm": 0, "y_mm": 55, "height_mm": 15, "thread": "#c0392b"}
+         "below": true, "gap_mm": 8, "height_mm": 15, "thread": "#c0392b"}
       ],
       "alphabets": {"script": ["A.pes", "E.pes", "l_lower.pes", "a_lower.pes"]},
       "target": "pes",            # or "machine": "brother"
@@ -46,6 +46,20 @@ def _thread(item: dict) -> str | None:
     if not (isinstance(value, str) and len(value) == 7 and value[0] == "#" and set(value[1:]) <= _HEX):
         raise ComposeError("bad_layout", "thread must be a hex color like #c0392b")
     return value
+
+
+def _vertical_extent(items: list[Placement]) -> tuple[float, float]:
+    """Top and bottom (mm, y down) of placements after their scale and rotation."""
+    from .inspect import stitch_bounds
+
+    top, bottom = float("inf"), float("-inf")
+    for item in items:
+        b = stitch_bounds(item.pattern)
+        w, h = (b[2] - b[0]) / 10 * item.scale, (b[3] - b[1]) / 10 * item.scale
+        if round(item.rotate_degrees) % 180 == 90:
+            w, h = h, w
+        top, bottom = min(top, item.y_mm - h / 2), max(bottom, item.y_mm + h / 2)
+    return top, bottom
 
 
 def target_extension(layout: dict) -> str:
@@ -122,14 +136,25 @@ def compose_layout(files: dict[str, bytes], layout: dict) -> tuple[ConversionRes
             align = item.get("align", "center")
             if align not in ("left", "center", "right"):
                 raise ComposeError("bad_layout", "align must be left, center or right")
-            placements.extend(layout_text(
+            letters = layout_text(
                 alphabet, text, x_mm=x, y_mm=y,
                 height_mm=item.get("height_mm") and _number(item, "height_mm", 0, 2, 300),
                 letter_spacing_mm=item.get("letter_spacing_mm") and _number(item, "letter_spacing_mm", 0, 0, 100),
                 word_spacing_mm=item.get("word_spacing_mm") and _number(item, "word_spacing_mm", 0, 0, 200),
                 line_spacing_mm=item.get("line_spacing_mm") and _number(item, "line_spacing_mm", 0, 0, 200),
                 align=align, thread=thread, allow_large_resize=allow,
-            ))
+            )
+            if item.get("below") or item.get("above"):
+                # Anchor the text under (or over) everything placed so far, y_mm becoming the gap.
+                if not placements:
+                    raise ComposeError("bad_layout", f"item {n + 1}: nothing to place the text below/above")
+                top, bottom = _vertical_extent(placements)
+                t_top, t_bottom = _vertical_extent(letters)
+                gap = _number(item, "gap_mm", 5.0, 0, 200)
+                shift = (bottom + gap - t_top) if item.get("below") else (top - gap - t_bottom)
+                for letter in letters:
+                    letter.y_mm += shift - y  # y_mm was used as the text centre; drop it
+            placements.extend(letters)
         else:
             raise ComposeError("bad_layout", f"item {n + 1}: unknown type {kind!r}")
 

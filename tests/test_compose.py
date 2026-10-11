@@ -228,3 +228,26 @@ def test_layout_picks_nearest_alphabet_size(pattern):
     result, report = compose_layout({**small, **big_letters}, layout)
     # 30 mm alphabet chosen and shrunk ~3%, not the 15 mm one doubled (which would be blocked).
     assert report.height_mm == pytest.approx(29, abs=0.3)
+
+
+def test_text_below_design(pattern):
+    files = {"design.pes": write_design(pattern, "pes").data, **_letter_files()}
+    layout = {
+        "items": [{"file": "design.pes"},
+                  {"type": "text", "text": "Ella", "alphabet": "a", "below": True, "gap_mm": 10}],
+        "alphabets": {"a": [n for n in files if n != "design.pes"]},
+        "target": "pes",
+    }
+    _, report = compose_layout(files, layout)
+    # design 30 mm tall + 10 mm gap + ~15.8 mm lettering
+    assert report.height_mm == pytest.approx(30 + 10 + 15.8, abs=0.6)
+
+
+def test_demo_page_only_when_enabled():
+    from fastapi.testclient import TestClient
+
+    from eeganizer_files.service import create_app
+
+    assert TestClient(create_app(token="t")).get("/demo").status_code == 404
+    r = TestClient(create_app(token="t", demo=True)).get("/demo")
+    assert r.status_code == 200 and "EEganizer File Tools" in r.text
