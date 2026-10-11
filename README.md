@@ -20,6 +20,8 @@ top of it is EEganizer code. The research behind this choice is in
 | Resize / rotate / mirror | `transform.transform` | Geometric only — stitches are **not** recalculated. Reports density change, stitches over the format's max length (12.1 mm cap), new short stitches. ≤10% ok, 10–20% caution, >20% blocked unless `allow_large_resize`. Free-standing lace is never resized. |
 | Combine designs | `compose.compose` | Place several designs in one hoop (position, rotate, mirror, guarded resize, recolor). Sewn in order with a trim between pieces; a color stop only when the thread changes. Reports size, overlaps and hoop fit. |
 | Lettering | `lettering.layout_text` | Spells text from an embroidery alphabet pack (one file per letter: `A.pes`, `aa.pes`, `a_lower.jef`, `Upper B.dst`, `Question Mark Symbol.vp3` …). `Alphabet.discover` finds every size/format in an unpacked pack and `choose_alphabet` picks the size nearest the requested height. Handles all-caps fonts (no descenders) on a common baseline, with descenders, spacing, alignment and multiple lines. Computer fonts (TTF) are not supported — that needs auto-digitizing. |
+| Machines | `machines.fit_machine` | Catalog of published sewing fields per brand hoop (unconfirmed figures flagged) and customer machine profiles. |
+| Thread chart | `worksheet.worksheet_html` | Printable HTML: preview, size, sewing time, every color stop with swatch, thread, stitches and thread length. |
 | Hoop fit | `hoops.check_fit`, `smallest_hoop` | Fit with clearance, with/without 90° rotation, scale-to-fit. Hoop table is nominal sizes — replace with per-machine sewing areas. |
 | Previews | `render.render_png`, `render_svg` | PNG with thread shading (1 px = 0.1 mm), SVG for a zoomable viewer. |
 | Isolation | `sandbox.run_isolated` | Parses untrusted uploads in a child process with timeout, memory and CPU limits. Use this for every customer file. |
@@ -36,6 +38,10 @@ A private API for EEganizer.com (bearer-token auth, every file parsed in the san
 | `POST /v1/thumbnail?size=256` | PNG thumbnail |
 | `POST /v1/convert?target=jef` or `?machine=brother` | converted file; warnings in `X-EEfile-Warnings` |
 | `POST /v1/fit?hoop=5x7` | fits / needs rotation / scale to fit |
+| `GET /v1/machines` | machine catalog: published sewing fields per brand hoop |
+| `POST /v1/fit-machines` (`machines=` JSON profiles) | "My Machines": smallest fitting hoop per machine, rotation, scale-to-fit, stitch limit, export format |
+| `POST /v1/worksheet` | printable thread chart (HTML) |
+| `POST /v1/export-batch?machine=brother&worksheets=true` (`files=` many) | ZIP of converted files (+ thread charts) ready for USB, with a per-file report |
 | `POST /v1/compose` (`files=` many, `layout=` JSON) | combined file + `X-EEfile-Compose-Report` (see `layout.py` for the layout format) |
 | `POST /v1/transform?scale=1.1&rotate=90&machine=janome` | transformed file + `X-EEfile-Transform-Report`; `422` with the report when blocked |
 
@@ -73,8 +79,9 @@ eefile compose layout.json combined.pes   # designs + lettering from a JSON layo
   measured standard; validate them with test stitch-outs.
 - **Native/object formats** (Bernina ART, Wilcom EMB, VIP, EDO, JAN, VP4) can be
   stored but not opened.
-- **Parsers are not fuzzed.** Always go through `sandbox.run_isolated`, and run
-  the worker in a no-network, read-only container in production.
+- **Parsers are fuzzed** (`scripts/fuzz.py`, plus a smoke run in the tests),
+  but still always go through `sandbox.run_isolated`, and run the worker in a
+  no-network, read-only container in production.
 - Unit tests use synthetic designs; `tests/test_corpus.py` checks real
   commercial files kept outside the repo (see [`docs/CORPUS.md`](docs/CORPUS.md)).
 - pystitch's SEW writer overflows on long moves; `convert.WRITER_OVERRIDES`

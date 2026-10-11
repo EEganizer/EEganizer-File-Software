@@ -10,8 +10,10 @@ from __future__ import annotations
 
 import base64
 import hmac
+import io
 import json
 import os
+import zipfile
 from pathlib import PurePath
 
 from fastapi import Depends, FastAPI, File, Form, Header, HTTPException, Query, UploadFile
@@ -23,6 +25,7 @@ from .machines import catalog_to_dict
 from .sandbox import SandboxError, run_isolated
 
 DEFAULT_MAX_UPLOAD_BYTES = 25 * 1024 * 1024
+MAX_BATCH_FILES = 100
 
 _STATUS_BY_CODE = {
     "unsupported_format": 415,
@@ -217,6 +220,65 @@ def create_app(
         if report["blocked"]:
             return JSONResponse(status_code=422, content={"error": "transform_blocked", "report": report})
         return file_response(result, _download_name(file.filename, target_ext), {"X-EEfile-Transform-Report": json.dumps(report)})
+
+    @app.post("/v1/export-batch", dependencies=auth)
+    def export_batch(
+        files: list[UploadFile] = File(...),
+        target: str | None = Query(None),
+        machine: str | None = Query(None),
+        pes_version: int = Query(6),
+        worksheets: bool = Query(False, description="add a printable thread chart per design"),
+    ) -> Response:
+        """Convert many designs for one machine into a single ZIP for a USB stick.
+
+        Each file is converted in its own sandboxed worker; a file that fails is
+        listed in the ZIP's report instead of failing the whole batch."""
+        if len(files) > MAX_BATCH_FILES:
+            raise ApiError(400, "too_many_files", f"at most {MAX_BATCH_FILES} files per batch")
+        if pes_version not in (1, 6):
+            raise ApiError(400, "bad_pes_version", "pes_version must be 1 or 6")
+        target_ext = _resolve_target(target, machine)
+        total = 0
+        report: list[dict] = []
+        used: set[str] = set()
+        buffer = io.BytesIO()
+        with zipfile.ZipFile(buffer, "w", zipfile.ZIP_DEFLATED) as archive:
+            for upload in files:
+                ext = _filename_extension(upload)
+                data = upload.file.read(max_upload_bytes + 1)
+                total += len(data)
+                if total > max_upload_bytes * 4:
+                    raise ApiError(413, "too_large", "batch is too large; split it into smaller batches")
+                name = _download_name(upload.filename, target_ext)
+                stem, n = name.rsplit(".", 1)[0], 2
+                while name.lower() in used:  # machines list files by name; keep them unique
+                    name = f"{stem} ({n}).{target_ext}"
+                    n += 1
+                entry = {"source": upload.filename, "file": None, "warnings": [], "error": None}
+                try:
+                    result = run_isolated("convert", data, ext, {"target": target_ext, "pes_version": pes_version},
+                                          timeout_s=sandbox_timeout_s)
+                    archive.writestr(name, base64.b64decode(result["data"]))
+                    used.add(name.lower())
+                    entry["file"], entry["warnings"] = name, result.get("warnings", [])
+                    if worksheets:
+                        sheet = run_isolated("worksheet", data, ext, {"title": PurePath(name).stem},
+                                             timeout_s=sandbox_timeout_s)
+                        archive.writestr(f"thread charts/{PurePath(name).stem}.html", sheet["html"])
+                except SandboxError as exc:
+                    entry["error"] = {"code": exc.code, "message": str(exc)}
+                report.append(entry)
+            archive.writestr("eeganizer-export.json", json.dumps({"target": target_ext, "files": report}, indent=2))
+        failed = sum(1 for e in report if e["error"])
+        return Response(
+            buffer.getvalue(),
+            media_type="application/zip",
+            headers={
+                "Content-Disposition": f'attachment; filename="EEganizer {target_ext.upper()} export.zip"',
+                "X-EEfile-Converted": str(len(report) - failed),
+                "X-EEfile-Failed": str(failed),
+            },
+        )
 
     @app.post("/v1/worksheet", dependencies=auth)
     def worksheet(file: UploadFile = File(...)) -> Response:

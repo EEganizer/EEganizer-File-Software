@@ -48,12 +48,12 @@ Husqvarna/Pfaff).
 
 | # | Milestone |
 |---|---|
-| 2.1 | Machine catalog: brand/model → formats, published sewing field per hoop, max stitch count |
-| 2.2 | "My Machines" customer profile; fit badge on every design ("fits 5x7", "rotate to fit", "too big") |
+| 2.1 | Machine catalog: brand/model → formats, published sewing field per hoop, max stitch count — **done** (`machines.py`, `/v1/machines`); confirm flagged Bernina/Janome GR fields |
+| 2.2 | "My Machines" customer profile; fit badge on every design ("fits 5x7", "rotate to fit", "too big") — **engine done** (`/v1/fit-machines`); needs website UI |
 | 2.3 | Guarded resize/rotate/mirror UI with the transform report (ok / caution / warning / blocked) |
-| 2.4 | Printable thread chart / worksheet (color sequence, stitch counts, size, thumbnail) |
+| 2.4 | Printable thread chart / worksheet (color sequence, stitch counts, size, thumbnail) — **done** (`/v1/worksheet`) |
 | 2.5 | Thread brand matching (convert hex colors to nearest Isacord / Madeira / Brother etc.) |
-| 2.6 | Batch export: pick designs → one ZIP in the machine's format, ready for USB |
+| 2.6 | Batch export: pick designs → one ZIP in the machine's format, ready for USB — **done** (`/v1/export-batch`) |
 | 2.7 | **Combine designs + lettering** (library, CLI, `/v1/compose`) — **engine done**; tested with a real 2,934-file alphabet pack ([CORPUS.md](CORPUS.md)); needs a layout editor UI (drag to place, live preview) and "My Fonts" (discover sizes/formats in an uploaded pack) |
 
 ### Phase 3 — Richer experience
