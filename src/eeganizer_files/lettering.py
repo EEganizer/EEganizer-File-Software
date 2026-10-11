@@ -248,6 +248,7 @@ def layout_text(
             items.append(Placement(
                 alphabet.letters[char], x_mm=cursor + w / 2, y_mm=top + h / 2, scale=scale,
                 thread=thread, label=f"'{char}'", allow_large_resize=allow_large_resize,
+                text_cap_height_mm=cap_mm,
             ))
             cursor += w + gap
         width = max(cursor - gap, 0.0) if items else 0.0

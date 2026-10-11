@@ -23,7 +23,7 @@ from .convert import ConversionResult, write_design
 from .design import load_design
 from .formats import MACHINE_FORMATS, normalize_extension
 from .hoops import HOOPS
-from .lettering import Alphabet, layout_text
+from .lettering import Alphabet, choose_alphabet, layout_text
 
 MAX_ITEMS = 50
 MAX_FILES = 150
@@ -105,9 +105,17 @@ def compose_layout(files: dict[str, bytes], layout: dict) -> tuple[ConversionRes
                 allow_large_resize=allow,
             ))
         elif kind == "text":
-            alphabet = alphabets.get(str(item.get("alphabet", "")))
-            if alphabet is None:
+            # "alphabet" may list several sizes of one font; the size nearest
+            # height_mm is used instead of stretching letters (wiki L5).
+            keys = item.get("alphabet", "")
+            keys = keys if isinstance(keys, list) else [keys]
+            if not keys or any(str(k) not in alphabets for k in keys):
                 raise ComposeError("bad_layout", f"item {n + 1}: unknown alphabet {item.get('alphabet')!r}")
+            choices = {str(k): alphabets[str(k)] for k in keys}
+            if len(choices) > 1 and item.get("height_mm"):
+                alphabet = choose_alphabet(choices, _number(item, "height_mm", 0, 2, 300))
+            else:
+                alphabet = next(iter(choices.values()))
             text = item.get("text")
             if not isinstance(text, str) or len(text) > 200:
                 raise ComposeError("bad_layout", "text must be a string of at most 200 characters")
@@ -146,6 +154,7 @@ def report_to_dict(report: ComposeReport) -> dict:
         "fits": None if report.fit is None else report.fit.fits,
         "needs_rotation": None if report.fit is None else report.fit.needs_rotation,
         "transforms": {k: {"level": v.level, "messages": v.messages} for k, v in report.transforms.items()},
+        "level": report.level,
         "messages": report.messages,
     }
 

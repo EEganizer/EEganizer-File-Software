@@ -202,3 +202,29 @@ def test_choose_alphabet_by_height():
         p.stitches = [[s[0] * 2, s[1] * 2, s[2]] for s in p.stitches]
     assert choose_alphabet({"s": small, "b": big}, 28) is big
     assert choose_alphabet({"s": small, "b": big}, 16) is small
+
+
+@pytest.mark.parametrize("height,level", [(15, "ok"), (6, "caution"), (4.6, "warning")])
+def test_small_lettering_warnings(height, level):
+    ab = make_alphabet()
+    for p in ab.letters.values():  # shrink the test alphabet so these heights are within resize limits
+        p.stitches = [[s[0] * height / 15, s[1] * height / 15, s[2]] for s in p.stitches]
+    _, report = compose(layout_text(ab, "Ella"))
+    assert report.level == level
+
+
+def test_layout_picks_nearest_alphabet_size(pattern):
+    small = {f"small_{n}.pes": write_design(make_letter(c), "pes").data for c, n in [("E", "E"), ("l", "l_lower")]}
+    big_letters = {}
+    for c, n in [("E", "E"), ("l", "l_lower")]:
+        letter = make_letter(c)
+        letter.stitches = [[s[0] * 2, s[1] * 2, s[2]] for s in letter.stitches]
+        big_letters[f"big_{n}.pes"] = write_design(letter, "pes").data
+    layout = {
+        "items": [{"type": "text", "text": "El", "alphabet": ["small", "big"], "height_mm": 29}],
+        "alphabets": {"small": list(small), "big": list(big_letters)},
+        "target": "pes",
+    }
+    result, report = compose_layout({**small, **big_letters}, layout)
+    # 30 mm alphabet chosen and shrunk ~3%, not the 15 mm one doubled (which would be blocked).
+    assert report.height_mm == pytest.approx(29, abs=0.3)

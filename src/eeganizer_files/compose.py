@@ -40,6 +40,14 @@ class Placement:
     thread: str | None = None  # recolor every block to this hex color, e.g. "#c0392b"
     label: str = ""
     allow_large_resize: bool = False
+    # Set by lettering: capital height of the text this letter belongs to.
+    text_cap_height_mm: float | None = None
+
+
+# Minimum capital height for satin lettering with 40 wt thread
+# (docs/wiki/lettering-and-fonts.md, L4; sources disagree, 5-6.35 mm).
+MIN_TEXT_HEIGHT_SOFT_MM = 6.35
+MIN_TEXT_HEIGHT_HARD_MM = 5.0
 
 
 @dataclass
@@ -52,6 +60,7 @@ class ComposeReport:
     transforms: dict[str, TransformReport] = field(default_factory=dict)
     fit: FitResult | None = None
     messages: list[str] = field(default_factory=list)
+    level: str = "ok"  # "ok" | "caution" | "warning"
 
 
 def _color_blocks(pattern: pystitch.EmbPattern) -> list[tuple[list[list[float]], pystitch.EmbThread]]:
@@ -163,8 +172,26 @@ def compose(
         report.messages.append(
             "Some pieces overlap; later pieces sew on top of earlier ones. Check the preview."
         )
+    text_heights = [p.text_cap_height_mm for p in placements if p.text_cap_height_mm]
+    if text_heights:
+        smallest = min(text_heights)
+        if smallest < MIN_TEXT_HEIGHT_HARD_MM:
+            report.level = "warning"
+            report.messages.append(
+                f"Lettering is {smallest:.1f} mm tall. Below {MIN_TEXT_HEIGHT_HARD_MM:g} mm satin letters "
+                "usually fill in and lose detail; use a larger size or a fine (60 wt) thread."
+            )
+        elif smallest < MIN_TEXT_HEIGHT_SOFT_MM:
+            report.level = "caution"
+            report.messages.append(
+                f"Lettering is {smallest:.1f} mm tall, close to the smallest size that stitches cleanly "
+                f"({MIN_TEXT_HEIGHT_SOFT_MM:g} mm); do a test stitch-out."
+            )
+    if report.overlaps and report.level == "ok":
+        report.level = "caution"
     if hoop is not None:
         report.fit = check_fit(info, hoop)
         if not report.fit.fits:
+            report.level = "warning"
             report.messages.append(f"The combined design does not fit the {hoop.label} hoop.")
     return out, report
