@@ -81,6 +81,14 @@ eefile compose layout.json combined.pes   # designs + lettering from a JSON layo
   works around it. PES files with a stray byte before the PEC end marker are
   repaired in `design.load_design`. Report both upstream.
 
+## Embroidery knowledge wiki
+
+[`docs/wiki/`](docs/wiki/README.md) explains machine embroidery and digitizing
+for the team and collects the **boundary conditions** the code must respect
+(hoop fields, stitch-length and density limits, resize bands, minimum letter
+heights, per-format limits), each marked sourced / rule of thumb / observed
+in our test files.
+
 ## Plan
 
 See [`docs/PLAN.md`](docs/PLAN.md) for phases, milestones, status and the
