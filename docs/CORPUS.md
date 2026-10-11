@@ -53,3 +53,38 @@ worksheets. Result: **all 102 files read, render and convert**; 294 tests pass.
 
 More designers and digitizing software, plus XXX, SEW and larger
 (10k+ stitch, multi-hoop) designs; then test stitch-outs on real machines.
+
+## Alphabet pack (2026-10-11)
+
+One commercial embroidery font ("Benjamin", JKD 101): 61 characters × 6 sizes
+(0.75–3.0 inch) × 8 formats (DST, EXP, HUS, JEF, PES, VIP, VP3, XXX) plus
+Embrilliance BX files — 2,934 files. Run with
+`EEFILE_FONT_DIR=/path/to/font pytest -q`.
+
+| Check | Result |
+|---|---|
+| Files read | all 2,562 non-VIP letter files; VIP (366) and BX (6) are store-only |
+| Alphabets discovered | 42 (6 sizes × 7 readable formats), 61 characters each |
+| Size label | "1.0 inch" = capital height (~24 mm); sizes chosen by nearest capital height |
+| Letters across formats | same size within 0.3 mm (1 mm for repaired PES letters) |
+| Name below a design | "Benjamin" under a real 4x4 design → one PES, one thread color for the name, fits 5x7 rotated |
+
+### What the font changed
+
+- **Real pack naming**: lowercase files are doubled letters (`aa.pes` —
+  Windows file names ignore case), symbols are spelled out with filler words
+  (`_Question Mark Symbol`, `Pound Sign Symbol Hashtag`, `Exclamation Point`),
+  and one file is misspelled (`Exlamation`). The parser handles all of these;
+  unrecognised files are listed in `Alphabet.unrecognized` so a customer can
+  be asked which character they are.
+- **All-caps style fonts**: lowercase is as tall as the capitals, so g/j/p/q/y
+  must not drop below the baseline. Descender handling now switches on only
+  when the font's x-height is clearly below its capital height.
+- **Broken PES letters**: 20 of 366 PES files have a stray byte before the
+  PEC end marker; pystitch then reads the thumbnail images as stitches (a
+  letter ~1 m tall). 17 of them also store stitches turned 90° clockwise
+  against their own header and the DST/JEF/VP3 copies. `load_design` now
+  checks decoded size against the PEC header, re-reads only up to the
+  recorded block end, and turns those 17 back upright (flagged in
+  `pattern.extras["eefile_repaired"]`). Worth reporting upstream to pystitch
+  and to the designer.

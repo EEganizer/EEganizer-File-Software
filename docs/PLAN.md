@@ -54,7 +54,7 @@ Husqvarna/Pfaff).
 | 2.4 | Printable thread chart / worksheet (color sequence, stitch counts, size, thumbnail) |
 | 2.5 | Thread brand matching (convert hex colors to nearest Isacord / Madeira / Brother etc.) |
 | 2.6 | Batch export: pick designs → one ZIP in the machine's format, ready for USB |
-| 2.7 | **Combine designs + lettering** (library, CLI, `/v1/compose`) — **engine done**; needs a layout editor UI (drag to place, live preview) and real alphabet packs to test with |
+| 2.7 | **Combine designs + lettering** (library, CLI, `/v1/compose`) — **engine done**; tested with a real 2,934-file alphabet pack ([CORPUS.md](CORPUS.md)); needs a layout editor UI (drag to place, live preview) and "My Fonts" (discover sizes/formats in an uploaded pack) |
 
 ### Phase 3 — Richer experience
 

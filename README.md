@@ -19,7 +19,7 @@ top of it is EEganizer code. The research behind this choice is in
 | Convert | `convert.convert`, `write_design` | Writes PES (v1 or v6), DST, JEF, EXP, VP3, XXX, SEW, U01, PEC, TBF. Warns when the target drops thread colors (DST/EXP/U01/TBF). |
 | Resize / rotate / mirror | `transform.transform` | Geometric only — stitches are **not** recalculated. Reports density change, stitches over the format's max length (12.1 mm cap), new short stitches. ≤10% ok, 10–20% caution, >20% blocked unless `allow_large_resize`. Free-standing lace is never resized. |
 | Combine designs | `compose.compose` | Place several designs in one hoop (position, rotate, mirror, guarded resize, recolor). Sewn in order with a trim between pieces; a color stop only when the thread changes. Reports size, overlaps and hoop fit. |
-| Lettering | `lettering.layout_text` | Spells text from an embroidery alphabet pack (one file per letter: `A.pes`, `a_lower.jef`, `Upper B.dst`, `exclamation.vp3` …) on a common baseline, with descenders, spacing, alignment and multiple lines. Computer fonts (TTF) are not supported — that needs auto-digitizing. |
+| Lettering | `lettering.layout_text` | Spells text from an embroidery alphabet pack (one file per letter: `A.pes`, `aa.pes`, `a_lower.jef`, `Upper B.dst`, `Question Mark Symbol.vp3` …). `Alphabet.discover` finds every size/format in an unpacked pack and `choose_alphabet` picks the size nearest the requested height. Handles all-caps fonts (no descenders) on a common baseline, with descenders, spacing, alignment and multiple lines. Computer fonts (TTF) are not supported — that needs auto-digitizing. |
 | Hoop fit | `hoops.check_fit`, `smallest_hoop` | Fit with clearance, with/without 90° rotation, scale-to-fit. Hoop table is nominal sizes — replace with per-machine sewing areas. |
 | Previews | `render.render_png`, `render_svg` | PNG with thread shading (1 px = 0.1 mm), SVG for a zoomable viewer. |
 | Isolation | `sandbox.run_isolated` | Parses untrusted uploads in a child process with timeout, memory and CPU limits. Use this for every customer file. |
@@ -78,7 +78,8 @@ eefile compose layout.json combined.pes   # designs + lettering from a JSON layo
 - Unit tests use synthetic designs; `tests/test_corpus.py` checks real
   commercial files kept outside the repo (see [`docs/CORPUS.md`](docs/CORPUS.md)).
 - pystitch's SEW writer overflows on long moves; `convert.WRITER_OVERRIDES`
-  works around it. Report upstream.
+  works around it. PES files with a stray byte before the PEC end marker are
+  repaired in `design.load_design`. Report both upstream.
 
 ## Plan
 

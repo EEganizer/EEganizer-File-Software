@@ -170,3 +170,35 @@ def test_service_compose(pattern):
     bad = client.post("/v1/compose", headers={"Authorization": "Bearer t"}, files=files,
                       data={"layout": json.dumps({**layout, "items": [{"type": "text", "text": "Zz", "alphabet": "a"}]})})
     assert bad.status_code == 422 and bad.json()["error"] == "missing_letters"
+
+
+@pytest.mark.parametrize(
+    "stem,char",
+    [("JKD101 1.0inch aa", "a"), ("JKD101 0.75inch A", "A"), ("JKD101 0.75inch _Ampersand Symbol", "&"),
+     ("JKD101 1.0inch BackSlash Symbol", "\\"), ("JKD101 1.0inch Exclamation Point", "!"),
+     ("JKD101 1.5inch Exlamation", "!"), ("JKD101 1.0inch Pound Sign Symbol Hashtag", "#"),
+     ("JKD101 1.0inch Question Mark Symbol", "?"), ("JKD101 0.75inch _Period Symbol", "."), ("zz", "z")],
+)
+def test_alphabet_pack_names(stem, char):
+    assert parse_letter_name(stem) == char
+
+
+def test_all_caps_font_has_no_descenders():
+    # Lowercase files as tall as capitals: g/y must sit on the baseline.
+    tall = {c: make_letter("E") for c in "Egxy"}
+    ab = Alphabet.from_patterns({("gg" if c == "g" else "xx" if c == "x" else "yy" if c == "y" else c): p
+                                 for c, p in tall.items()})
+    assert not ab.has_descenders
+    items = layout_text(ab, "Egy")
+    assert len({round(i.y_mm, 3) for i in items}) == 1
+
+
+def test_choose_alphabet_by_height():
+    from eeganizer_files.lettering import choose_alphabet
+
+    small = make_alphabet()
+    big = make_alphabet()  # separate letter objects
+    for p in big.letters.values():
+        p.stitches = [[s[0] * 2, s[1] * 2, s[2]] for s in p.stitches]
+    assert choose_alphabet({"s": small, "b": big}, 28) is big
+    assert choose_alphabet({"s": small, "b": big}, 16) is small

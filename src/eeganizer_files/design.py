@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import io
+import struct
 from pathlib import Path
 
 import pystitch
@@ -57,12 +58,75 @@ def load_design(
     except Exception as exc:  # parsers raise anything from struct.error to IndexError
         raise DesignError("corrupt", f"could not parse .{ext} file: {type(exc).__name__}") from exc
 
+    if ext in ("pes", "pec"):
+        pattern = _check_pec_block(data, ext, pattern, spec.reader)
+
     stitch_count = pattern.count_stitch_commands(pystitch.STITCH)
     if stitch_count == 0:
         raise DesignError("empty_design", "file contains no stitches")
     if len(pattern.stitches) > max_stitches:
         raise DesignError("too_many_stitches", f"design has {len(pattern.stitches)} commands")
     return pattern
+
+
+def _pec_layout(data: bytes, ext: str) -> tuple[int, int, float, float] | None:
+    """(stitch start, stitch block end, width mm, height mm) from the PEC header, or None."""
+    try:
+        pec = struct.unpack_from("<I", data, 8)[0] if ext == "pes" else 8
+        block_length = data[pec + 514] | data[pec + 515] << 8 | data[pec + 516] << 16
+        width, height = struct.unpack_from("<HH", data, pec + 520)
+    except (struct.error, IndexError):
+        return None
+    return pec + 532, pec + 512 + block_length, width / 10.0, height / 10.0
+
+
+def _check_pec_block(data: bytes, ext: str, pattern: pystitch.EmbPattern, reader) -> pystitch.EmbPattern:
+    """Guard against pystitch reading past the PEC stitch block.
+
+    pystitch stops only at an FF 00 end marker. A file with a stray byte
+    before the marker (seen in a commercial alphabet pack) desynchronises the
+    decoder, which then reads the preview images as hundreds of random
+    stitches. The PEC header records the block end and the design size, so
+    when the decoded size disagrees we re-read with the stream cut at the
+    block end, and reject the file if it still disagrees.
+    """
+    from .inspect import stitch_bounds  # local import: inspect imports formats only
+
+    layout = _pec_layout(data, ext)
+    if layout is None:
+        return pattern
+    _start, block_end, width, height = layout
+
+    def matches(p: pystitch.EmbPattern, swapped: bool = False) -> bool:
+        b = stitch_bounds(p)
+        w, h = (b[2] - b[0]) / 10, (b[3] - b[1]) / 10
+        if swapped:
+            w, h = h, w
+        return abs(w - width) <= 1.0 and abs(h - height) <= 1.0
+
+    if width == 0 or height == 0 or matches(pattern):
+        return pattern
+    if not 0 < block_end <= len(data):
+        raise DesignError("corrupt", "PES stitch data does not match its header")
+    retry = pystitch.EmbPattern()
+    try:
+        reader.read(io.BytesIO(data[:block_end]), retry, {})
+    except Exception as exc:
+        raise DesignError("corrupt", f"could not parse .{ext} file: {type(exc).__name__}") from exc
+    if matches(retry):
+        retry.extras["eefile_repaired"] = "pec_block_overrun"
+        return retry
+    if matches(retry, swapped=True):
+        # Every such file in the alphabet pack that exposed this had its PEC
+        # stitches turned 90 degrees clockwise relative to its own header and
+        # to the same letter in DST/JEF/VP3; turning them back restores both.
+        b = stitch_bounds(retry)
+        matrix = pystitch.EmbMatrix()
+        matrix.post_rotate(-90, (b[0] + b[2]) / 2, (b[1] + b[3]) / 2)
+        retry.transform(matrix)
+        retry.extras["eefile_repaired"] = "pec_block_overrun,rotated_to_header"
+        return retry
+    raise DesignError("corrupt", "PES stitch data does not match its header")
 
 
 def clone_pattern(pattern: pystitch.EmbPattern) -> pystitch.EmbPattern:

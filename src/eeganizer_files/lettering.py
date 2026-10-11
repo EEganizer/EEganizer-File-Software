@@ -13,18 +13,19 @@ from __future__ import annotations
 
 import re
 import statistics
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 
 import pystitch
 
 from .compose import ComposeError, Placement
-from .design import load_design_file
-from .formats import UNITS_PER_MM
+from .design import DesignError, load_design_file
+from .formats import UNITS_PER_MM, get_format
 from .inspect import stitch_bounds
 
 _PUNCTUATION = {
     "exclamation": "!", "exclamationmark": "!", "exclaim": "!",
+    "exlamation": "!", "exclamtion": "!", "exclimation": "!",  # seen in real packs
     "question": "?", "questionmark": "?",
     "period": ".", "dot": ".", "fullstop": ".",
     "comma": ",",
@@ -35,11 +36,15 @@ _PUNCTUATION = {
     "colon": ":", "semicolon": ";",
     "at": "@", "hash": "#", "pound": "#", "number": "#",
     "heart": "♥",
-    "plus": "+", "slash": "/",
+    "plus": "+", "slash": "/", "backslash": "\\", "hashtag": "#",
     "openparen": "(", "leftparen": "(", "closeparen": ")", "rightparen": ")",
 }
 _DIGIT_WORDS = {w: str(i) for i, w in enumerate(
     ["zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine"])}
+
+# Words some packs add around a symbol's name: "Question Mark Symbol",
+# "Exclamation Point", "Pound Sign Symbol Hashtag".
+_FILLER = {"symbol", "sign", "point", "mark", "character", "char", "letter", "glyph"}
 
 DESCENDERS = set("gjpqy,;")
 # Letters whose top sits at the x-height line (no ascender, no descender).
@@ -61,11 +66,13 @@ def parse_letter_name(stem: str) -> str | None:
                           ("small", "lower")):
         if marker in words:
             case = value
-            words.remove(marker)
             tokens = [t for t in tokens if t.lower() != marker]
+            words = [t.lower() for t in tokens]
             break
 
-    last = tokens[-1] if tokens else ""
+    if not tokens:
+        return None
+    last = tokens[-1]
     lw = last.lower()
     if len(last) == 1 and last.isalnum():
         if case == "upper":
@@ -73,12 +80,24 @@ def parse_letter_name(stem: str) -> str | None:
         if case == "lower":
             return last.lower()
         return last
+    # Lowercase as a doubled letter ("aa.pes"): Windows file names ignore case,
+    # so packs can't ship both "A.pes" and "a.pes".
+    if len(last) == 2 and last[0] == last[1] and last.isalpha():
+        if case == "upper":
+            return last[0].upper()
+        return last[0].lower() if case == "lower" or last.islower() else last[0]
     if lw in _DIGIT_WORDS:
         return _DIGIT_WORDS[lw]
-    if lw in _PUNCTUATION:
-        return _PUNCTUATION[lw]
-    if len(words) >= 2 and words[-2] + lw in _PUNCTUATION:  # "question mark"
-        return _PUNCTUATION[words[-2] + lw]
+    while words:
+        lw = words[-1]
+        if len(words) >= 2 and words[-2] + lw in _PUNCTUATION:  # "question mark"
+            return _PUNCTUATION[words[-2] + lw]
+        if lw in _PUNCTUATION:
+            return _PUNCTUATION[lw]
+        if lw in _FILLER:
+            words.pop()
+            continue
+        break
     return None
 
 
@@ -86,15 +105,51 @@ def parse_letter_name(stem: str) -> str | None:
 class Alphabet:
     letters: dict[str, pystitch.EmbPattern]
     name: str = ""
+    # File names in the alphabet's folder that matched no character, so the
+    # customer can be asked which character they are.
+    unrecognized: list[str] = field(default_factory=list)
 
     @classmethod
     def from_files(cls, paths, name: str = "") -> "Alphabet":
         letters: dict[str, pystitch.EmbPattern] = {}
         for path in map(Path, paths):
             char = parse_letter_name(path.stem)
-            if char is not None:
+            if char is None:
+                continue
+            try:
                 letters[char] = load_design_file(path)
+            except DesignError:
+                continue  # store-only formats (VIP, BX ...) or a broken letter
         return cls(letters, name)
+
+    @classmethod
+    def discover(cls, root, min_letters: int = 10) -> dict[str, "Alphabet"]:
+        """Find alphabets in an unpacked font pack.
+
+        Packs ship one folder per size and format ("1.0 inch/PES/..."); each
+        (folder, format) with at least ``min_letters`` recognised characters
+        becomes one alphabet, keyed by its relative folder path and format."""
+        root = Path(root)
+        groups: dict[tuple[Path, str], list[Path]] = {}
+        unknown: dict[tuple[Path, str], list[str]] = {}
+        for path in root.rglob("*"):
+            if not path.is_file():
+                continue
+            key = (path.parent, path.suffix.lower())
+            if parse_letter_name(path.stem) is not None:
+                groups.setdefault(key, []).append(path)
+            else:
+                unknown.setdefault(key, []).append(path.name)
+        found: dict[str, Alphabet] = {}
+        for (folder, ext), paths in sorted(groups.items()):
+            if len(paths) < min_letters or get_format(ext) is None:
+                continue
+            key = f"{folder.relative_to(root).as_posix()} [{ext[1:]}]"
+            alphabet = cls.from_files(paths, key)
+            alphabet.unrecognized = sorted(unknown.get((folder, ext), []))
+            if len(alphabet.letters) >= min_letters:
+                found[key] = alphabet
+        return found
 
     @classmethod
     def from_patterns(cls, named: dict[str, pystitch.EmbPattern], name: str = "") -> "Alphabet":
@@ -124,6 +179,13 @@ class Alphabet:
     def x_height(self) -> float | None:
         heights = self._heights(_X_HEIGHT_LETTERS)
         return statistics.median(heights) if heights else None
+
+    @property
+    def has_descenders(self) -> bool:
+        """False for all-caps style fonts whose lowercase files are as tall as
+        the capitals (then g, j, p, q, y sit on the baseline like every letter)."""
+        x = self.x_height
+        return x is not None and x < 0.85 * self.cap_height
 
     def missing(self, text: str) -> list[str]:
         return sorted({c for c in text if not c.isspace() and c not in self.letters})
@@ -177,9 +239,9 @@ def layout_text(
             b = stitch_bounds(alphabet.letters[char])
             w = (b[2] - b[0]) / UNITS_PER_MM * scale
             h = (b[3] - b[1]) / UNITS_PER_MM * scale
-            if char in DESCENDERS and char.isalpha():
+            if char in DESCENDERS and char.isalpha() and alphabet.has_descenders:
                 top = -x_height_mm  # top of a g/j/p/q/y sits on the x-height line
-            elif char in ",;":
+            elif char in ",;" and alphabet.has_descenders:
                 top = -min(h, x_height_mm * 0.3)  # hangs just below the baseline
             else:
                 top = -h  # sits on the baseline
@@ -201,3 +263,14 @@ def layout_text(
             item.y_mm += baseline
             placements.append(item)
     return placements
+
+
+def choose_alphabet(alphabets: dict[str, Alphabet], height_mm: float) -> Alphabet:
+    """The alphabet whose capital height is closest (by ratio) to ``height_mm``,
+    so lettering is resized as little as possible."""
+    import math
+
+    candidates = [a for a in alphabets.values() if a.cap_height > 0]
+    if not candidates:
+        raise ComposeError("bad_layout", "no usable alphabet")
+    return min(candidates, key=lambda a: abs(math.log(height_mm * UNITS_PER_MM / a.cap_height)))
