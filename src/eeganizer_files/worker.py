@@ -12,6 +12,7 @@ from .design import DesignError, load_design
 from .hoops import HOOPS, check_fit, smallest_hoop
 from .inspect import analyze
 from .layout import compose_layout, report_to_dict
+from .machines import fit_machine, profile_from_dict
 from .render import render_png, render_thumbnail
 from .transform import transform
 
@@ -62,6 +63,16 @@ def _handle(request: dict) -> dict:
             result = write_design(new, target, pes_version=params.get("pes_version", 6))
             out.update(data=base64.b64encode(result.data).decode(), extension=result.extension, warnings=result.warnings)
         return out
+    if op == "fit_machines":
+        info = analyze(pattern)
+        results = []
+        for raw in params["machines"]:
+            try:
+                results.append(fit_machine(info, profile_from_dict(raw)).to_dict())
+            except ValueError as exc:
+                raise DesignError("bad_machine", str(exc)) from exc
+        return {"width_mm": info.width_mm, "height_mm": info.height_mm,
+                "stitch_count": info.stitch_count, "machines": results}
     if op == "fit":
         info = analyze(pattern)
         fit = check_fit(info, HOOPS[params["hoop"]])

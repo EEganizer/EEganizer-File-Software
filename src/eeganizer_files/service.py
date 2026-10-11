@@ -19,6 +19,7 @@ from fastapi.responses import JSONResponse, Response
 
 from .formats import KNOWN_UNREADABLE, MACHINE_FORMATS, READABLE, WRITABLE, normalize_extension
 from .hoops import HOOPS
+from .machines import catalog_to_dict
 from .sandbox import SandboxError, run_isolated
 
 DEFAULT_MAX_UPLOAD_BYTES = 25 * 1024 * 1024
@@ -34,6 +35,7 @@ _STATUS_BY_CODE = {
     "crashed": 422,
     "timeout": 504,
     "bad_layout": 400,
+    "bad_machine": 400,
     "missing_file": 400,
     "missing_target": 400,
     "unknown_machine": 400,
@@ -215,6 +217,25 @@ def create_app(
         if report["blocked"]:
             return JSONResponse(status_code=422, content={"error": "transform_blocked", "report": report})
         return file_response(result, _download_name(file.filename, target_ext), {"X-EEfile-Transform-Report": json.dumps(report)})
+
+    @app.get("/v1/machines", dependencies=auth)
+    def machines() -> dict:
+        return catalog_to_dict()
+
+    @app.post("/v1/fit-machines", dependencies=auth)
+    def fit_machines(file: UploadFile = File(...), machines: str = Form(...)) -> dict:
+        """Check one design against the customer's machines ("My Machines").
+
+        ``machines`` is a JSON list of profiles:
+        ``[{"name": "My PE800", "brand": "brother", "hoops": ["brother:5x7"]}]``."""
+        try:
+            profiles = json.loads(machines)
+        except ValueError as exc:
+            raise ApiError(400, "bad_machine", "machines is not valid JSON") from exc
+        if not isinstance(profiles, list) or not profiles or len(profiles) > 20:
+            raise ApiError(400, "bad_machine", "machines must be a list of 1-20 profiles")
+        data, ext = read_upload(file)
+        return run("fit_machines", data, ext, {"machines": profiles})
 
     @app.post("/v1/compose", dependencies=auth)
     def compose_endpoint(files: list[UploadFile] = File(...), layout: str = Form(...)) -> Response:
