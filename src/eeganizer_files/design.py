@@ -12,6 +12,10 @@ from .formats import KNOWN_UNREADABLE, get_format, normalize_extension
 
 DEFAULT_MAX_BYTES = 25 * 1024 * 1024
 DEFAULT_MAX_STITCHES = 2_000_000
+# Larger than any embroidery field, including commercial jumbo frames. A
+# bigger result means the file was misread (wiki: reject anything bigger
+# than the largest hoop); found by scripts/fuzz.py.
+MAX_DESIGN_MM = 1200.0
 
 
 class DesignError(ValueError):
@@ -19,7 +23,7 @@ class DesignError(ValueError):
 
     ``code`` is stable and safe to show/translate in the UI:
     ``unsupported_format``, ``unreadable_format``, ``too_large``,
-    ``empty_design``, ``corrupt``, ``too_many_stitches``.
+    ``empty_design``, ``corrupt``, ``too_many_stitches``, ``implausible_size``.
     """
 
     def __init__(self, code: str, message: str):
@@ -66,6 +70,18 @@ def load_design(
         raise DesignError("empty_design", "file contains no stitches")
     if len(pattern.stitches) > max_stitches:
         raise DesignError("too_many_stitches", f"design has {len(pattern.stitches)} commands")
+
+    from .inspect import stitch_bounds
+
+    min_x, min_y, max_x, max_y = stitch_bounds(pattern)
+    if max(max_x - min_x, max_y - min_y) / 10.0 > MAX_DESIGN_MM:
+        raise DesignError("implausible_size", "design is larger than any embroidery field; the file is damaged")
+
+    # Damaged color tables can leave empty thread slots (fuzz finding, JEF).
+    pattern.threadlist = [
+        t if t is not None else pystitch.EmbThread("#808080", description="Unknown")
+        for t in pattern.threadlist
+    ]
     return pattern
 
 

@@ -30,6 +30,7 @@ _STATUS_BY_CODE = {
     "corrupt": 422,
     "empty_design": 422,
     "too_many_stitches": 422,
+    "implausible_size": 422,
     "crashed": 422,
     "timeout": 504,
     "bad_layout": 400,

@@ -69,3 +69,31 @@ def test_sew_long_jump_regression(pattern):
     # pystitch's SEW writer overflows on moves > 12.7 mm; our override must split them.
     data = write_design(pattern, "sew").data
     assert analyze(load_design(data, "sew")).height_mm == 30.0
+
+
+def test_implausible_size_rejected():
+    import pystitch
+
+    p = pystitch.EmbPattern()
+    p.add_stitch_absolute(pystitch.STITCH, 0, 0)
+    p.add_stitch_absolute(pystitch.STITCH, 120, 0)
+    p.add_stitch_absolute(pystitch.JUMP, 15000, 0)
+    p.add_stitch_absolute(pystitch.STITCH, 15000, 10)
+    with pytest.raises(DesignError) as err:
+        load_design(write_design(p, "pes").data, "pes")
+    assert err.value.code == "implausible_size"
+
+
+def test_empty_thread_slots_are_filled(pattern, monkeypatch):
+    import pystitch
+
+    data = write_design(pattern, "jef").data
+    original = pystitch.JefReader.read
+
+    def read_with_hole(f, out, settings=None):
+        original(f, out, settings)
+        out.threadlist[0] = None  # what a damaged JEF color table produced
+
+    monkeypatch.setattr(pystitch.JefReader, "read", read_with_hole)
+    info = analyze(load_design(data, "jef"))
+    assert info.threads[0].hex_color == "#808080"

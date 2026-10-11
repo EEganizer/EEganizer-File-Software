@@ -36,7 +36,7 @@ everything customer-facing ourselves. Research: [`research/README.md`](research/
 | 1.1 | Format library: read ~40 formats, properties, previews, conversion, guarded transforms, hoop fit, sandbox, CLI, tests | **Done** (`main`) |
 | 1.2 | HTTP service: `/v1/formats`, `/inspect`, `/thumbnail`, `/convert` (by format or machine brand), `/fit`, `/transform`; upload size limit; token auth; Dockerfile; CI | **Done** (`claude/service-api`) |
 | 1.3 | Real-file test corpus: 5+ real files per format (PES, DST, JEF, EXP, VP3, HUS, XXX), golden properties, round-trip checks | **Started**: 102 files / 6 formats pass ([CORPUS.md](CORPUS.md)); need XXX, SEW and more designers |
-| 1.4 | Fuzz the parsers (malformed/truncated/random files) in the sandbox; fix or contain every crash and hang | Planned |
+| 1.4 | Fuzz the parsers (malformed/truncated/random files) in the sandbox; fix or contain every crash and hang | **Done**: `scripts/fuzz.py`; 15k cases over synthetic + real files; fixed empty thread slots and implausible sizes; 400-case smoke test on every run |
 | 1.5 | WordPress integration: on upload, call `/inspect` + `/thumbnail` and store results; design detail page shows properties and thread list; "Download for my machine" button | Needs EEganizer.com owner sign-off |
 
 **Exit criteria:** a customer uploads a PES, sees an accurate preview and
